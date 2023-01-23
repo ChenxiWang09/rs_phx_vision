@@ -1,0 +1,133 @@
+
+function [detection]=chamfermatching_nopic_forpython(query_path,template_path,candidate_amount, x1,x2,y1,y2,threshold_of_size)
+
+%//==================================================================
+%(1)input parameter 
+% query_path: path of query edge image, format:pgm.
+% template_path: path of template edge image, format:pgm
+% candidate_amount:the amount of candidate
+% x1,y1,x2,y2: the roughly position of object in the query image
+% threshold_of_size is the parameter of the error limitation of image position
+%(2)output parameter
+%partname: detected partname for limit amount
+%relative cost value
+%//==================================================================
+
+query=imread(query_path);
+disp('Fast Directional Chamfer Matching for searching matching');
+%//==================================================================
+%// Basic Configuration
+%//==================================================================
+
+sz=size(query);
+threshold = 0.5;
+value=0.5;
+partname='';
+% Set the parameter for line fitting function
+lineMatchingPara = struct(...
+    'NUMBER_DIRECTION',60,...
+    'DIRECTIONAL_COST',0.5,...
+    'MAXIMUM_EDGE_COST',30,...
+    'MATCHING_SCALE',1.0,...
+    'TEMPLATE_SCALE',0.6761,...
+    'BASE_SEARCH_SCALE',1.20,...
+    'MIN_SEARCH_SCALE',-7,...
+    'MAX_SEARCH_SCALE',0,...
+    'BASE_SEARCH_ASPECT',1.1,...
+    'MIN_SEARCH_ASPECT',-1,...
+    'MAX_SEARCH_ASPECT',1,...    
+    'SEARCH_STEP_SIZE',2,...
+    'SEARCH_BOUNDARY_SIZE',2,...
+    'MIN_COST_RATIO',1.0...    
+    );
+% Set the parameter for line fitting function
+lineFittingPara = struct(...
+    'SIGMA_FIT_A_LINE',0.5,...
+    'SIGMA_FIND_SUPPORT',0.5,...
+    'MAX_GAP',2.0,...
+    'N_LINES_TO_FIT_IN_STAGE_1',300,...
+    'N_TRIALS_PER_LINE_IN_STAGE_1',100,...
+    'N_LINES_TO_FIT_IN_STAGE_2',100000,...
+    'N_TRIALS_PER_LINE_IN_STAGE_2',1);
+
+lineFittingPara2 = struct(...
+    'SIGMA_FIT_A_LINE',0.5,...
+    'SIGMA_FIND_SUPPORT',0.5,...
+    'MAX_GAP',100,...
+    'N_LINES_TO_FIT_IN_STAGE_1',0,...
+    'N_TRIALS_PER_LINE_IN_STAGE_1',0,...
+    'N_LINES_TO_FIT_IN_STAGE_2',100000,...
+    'N_TRIALS_PER_LINE_IN_STAGE_2',1);
+
+namelist_pgm = dir(strcat(template_path,'*.pgm'));  %获得文件夹下所有的 .jpg图片
+len = length(namelist_pgm);
+infor = zeros(len, 7);
+infor(:,5)=10;
+for i = 1:len
+    tempname=namelist_pgm(i).name;
+    templateEdgeMap=imread(strcat(template_path, tempname));
+
+    %//==================================================================
+    %// Convert edge map into line representation
+    %//==================================================================
+    % convert the template edge map into a line representation
+    [lineRep lineMap] = mex_fitline(double(templateEdgeMap),lineFittingPara);
+    % display the top few line segments to illustrate the representation
+    nLine = size(lineRep,1);
+    %//==================================================================
+    %// FDCM detection
+    %//==================================================================
+    template = cell(1);
+    tempate{1} = lineRep;
+    
+    [detWinds] = mex_fdcm_detect(double(query),tempate,threshold,...
+        lineFittingPara2,lineMatchingPara);
+    nDetection = size(detWinds,1);
+    infor(i,7)=i;
+    if nDetection == 0
+        continue;
+    end
+    % position check
+    for j=1:nDetection
+        if(abs(detWinds(j,1)-x1)<(sz(2)/threshold_of_size) && abs(detWinds(j,2)-y1)<(sz(1)/threshold_of_size) && abs(detWinds(j,1) + detWinds(j,3)-x2)<(sz(2)/threshold_of_size)  && abs(detWinds(j,2)+detWinds(j,4)-y2)<(sz(1)/threshold_of_size))
+            infor(i,1:6) = detWinds(j,:);
+            break;
+        end
+    end
+    % if(cost~=1)
+    %     color = [0 1 0];
+    %     lineWidth = 3;
+    %     imshow(queryColor,[]);
+    %     i=number;
+    %     sx = detWinds(i,1);
+    %     ex = sx + detWinds(i,3);
+    %     sy = detWinds(i,2);
+    %     ey = sy + detWinds(i,4);
+    %     line([sx ex],[sy sy],'Color',color,'LineWidth',lineWidth);
+    %     line([sx ex],[ey ey],'Color',color,'LineWidth',lineWidth);
+    %     line([sx sx],[sy ey],'Color',color,'LineWidth',lineWidth);
+    %     line([ex ex],[sy ey],'Color',color,'LineWidth',lineWidth);
+    %     text(sx,sy-10,num2str(cost),'Color','yellow','FontSize',14);
+    % end
+end
+cost_list=infor(:,5);
+cost_list=sort(cost_list);
+count = 1;
+while count<=5
+    for i=count:len
+        if infor(i,5)==cost_list(count)
+            temp=infor(count,:);
+            infor(count,:)=infor(i,:);
+            infor(i,:) = temp;
+            count=count+1;
+            break;
+        end
+    end
+end
+detection=zeros(candidate_amount,2);
+for i = 1:candidate_amount
+    detection(i,1)=infor(i,7);
+    detection(i,2)=infor(i,5);
+end
+
+end
