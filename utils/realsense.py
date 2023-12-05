@@ -1,6 +1,6 @@
 import pyrealsense2 as rs2
 import numpy as np
-import open3d as o3d
+# import open3d as o3d
 import cv2
 from cv2 import aruco as aruco
 
@@ -312,3 +312,7 @@ class RealSense(object):
     def stop(self):
         self.__pipeline.stop()
         self.__flag = False
+
+if __name__ == "__main__":
+    realsense_client = RealSense()
+    realsense_client.change_camera()
